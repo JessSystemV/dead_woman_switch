@@ -1,18 +1,11 @@
-use std::{env, fs, io, path::Path, process, thread, time::Duration};
-
-extern "C" {
-    fn kill(pid: i32, sig: core::ffi::c_int) -> core::ffi::c_int;
-    fn sync();
-}
+use std::process::Command;
+use std::{env, path::Path, thread, time::Duration};
 
 fn main() {
     let argv = env::args().collect::<Vec<_>>();
 
     if argv.len() <= 1 {
         help();
-        unsafe {
-            kill(process::id() as i32, 15);
-        }
         return;
     }
 
@@ -33,68 +26,16 @@ fn main() {
     }
 
     #[cfg(debug_assertions)]
-    println!("File died, killing system.");
-
-    if kill_all().is_err() {
-        #[cfg(debug_assertions)]
-        println!("E-Stop due to error.");
-        thread::sleep(Duration::from_millis(500));
-        unsafe {
-            sync();
-        }
-        fs::write("/proc/sysrq-trigger", "o").unwrap();
-    }
+    println!("File died, suspending system.");
+    let _output =  {
+        Command::new("systemctl").arg("suspend")
+            .output()
+            .expect("failed to execute process")
+    };
 }
 
 fn help() {
     println!("dead_woman_switch DEVFILE");
     println!();
-    println!(" Kills the OS when a device is unplugged. ");
-}
-
-fn kill_all() -> io::Result<()> {
-    let files = fs::read_dir("/proc/")?
-        .map(Result::unwrap)
-        .filter(|x| x.file_type().unwrap().is_dir())
-        .filter(|x| {
-            x.file_name()
-                .to_str()
-                .unwrap()
-                .chars()
-                .all(|x| x.is_numeric())
-        })
-        .map(|x| x.file_name().into_string().unwrap().parse::<i32>().unwrap())
-        .collect::<Vec<_>>();
-
-    for process in &files {
-        let process = *process;
-        unsafe {
-            if process as u32 == process::id() {
-                continue;
-            }
-            kill(process, 15);
-        }
-    }
-
-    thread::sleep(Duration::from_millis(200));
-
-    for process in &files {
-        let process = *process;
-        unsafe {
-            if process as u32 == process::id() {
-                continue;
-            }
-            kill(process, 9);
-        }
-    }
-
-    unsafe {
-        sync();
-    }
-    thread::sleep(Duration::from_millis(100));
-    fs::write("/proc/sysrq-trigger", "u")?;
-    thread::sleep(Duration::from_millis(200));
-    fs::write("/proc/sysrq-trigger", "o")?;
-
-    Ok(())
+    println!(" Suspends the OS when a device is unplugged. ");
 }

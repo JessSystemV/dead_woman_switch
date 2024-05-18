@@ -3,5 +3,5 @@
 version = 3
 
 [[package]]
-name = "dead_woman_switch"
+name = "dws"
 version = "0.1.0"
